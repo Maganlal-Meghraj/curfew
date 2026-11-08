@@ -5,6 +5,7 @@ import {
   FixedBudget,
   LambdaBudget,
   MaxEstimator,
+  StopReason,
   type TimeBudget,
   runBatches,
 } from '../../src'
@@ -30,25 +31,25 @@ describe('runBatches', () => {
     const seen: number[] = []
     const result = await runBatches([1, 2, 3], (b) => void seen.push(b), { budget: new FixedBudget(1000) })
     expect(seen).toEqual([1, 2, 3])
-    expect(result).toEqual({ batchesProcessed: 3, mayHaveMore: false })
+    expect(result).toEqual({ batchesProcessed: 3, mayHaveMore: false, reason: StopReason.DONE })
   })
 
   it('accepts a string source', async () => {
     const seen: string[] = []
     const result = await runBatches('ab', (c) => void seen.push(c), { budget: new FixedBudget(1000) })
     expect(seen).toEqual(['a', 'b'])
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: false })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: false, reason: StopReason.DONE })
   })
 
   it('stops before a batch once the deadline has passed', async () => {
     const neverPredicts: Estimator = { record: () => {}, estimateMs: () => 0 }
     const result = await runBatches([1, 2, 3], work(60), { budget: new FixedBudget(100), estimator: neverPredicts })
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
   it('skips a batch that the longest observed batch says will not fit', async () => {
     const result = await runBatches([1, 2, 3], work(40), { budget: new FixedBudget(100) })
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
   })
 
   it('MaxEstimator initialMs gates the first batch', async () => {
@@ -58,7 +59,7 @@ describe('runBatches', () => {
       estimator: new MaxEstimator(150),
     })
     expect(handler).not.toHaveBeenCalled()
-    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
   })
 
   it('times the fetch from the source together with the handler', async () => {
@@ -71,7 +72,7 @@ describe('runBatches', () => {
     const estimator = new MaxEstimator()
     const result = await runBatches(slowSource(), work(25), { budget: new FixedBudget(100), estimator })
     expect(estimator.estimateMs()).toBe(45)
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
   })
 
   it('uses a custom estimator', async () => {
@@ -82,7 +83,7 @@ describe('runBatches', () => {
     }
     const result = await runBatches([1, 2, 3], work(10), { budget: new FixedBudget(1000), estimator })
     expect(recorded).toEqual([10, 10])
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
   })
 
   it('aborts the signal mid-batch with a TimeoutError and lets the batch finish', async () => {
@@ -102,7 +103,7 @@ describe('runBatches', () => {
     )
     expect((reason as DOMException).name).toBe('TimeoutError')
     expect(finished).toBe(true)
-    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
   it('does not close the source on early stop, so a generator can be resumed', async () => {
@@ -112,7 +113,7 @@ describe('runBatches', () => {
     const source = gen()
     const returnSpy = vi.spyOn(source, 'return')
     const first = await runBatches(source, work(60), { budget: new FixedBudget(100) })
-    expect(first).toEqual({ batchesProcessed: 1, mayHaveMore: true })
+    expect(first).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
     expect(returnSpy).not.toHaveBeenCalled()
 
     const rest: number[] = []
@@ -170,14 +171,14 @@ describe('runBatches', () => {
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: { remainingMs: () => NaN } })
     expect(handler).not.toHaveBeenCalled()
-    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
   it('works with a custom TimeBudget', async () => {
     let calls = 0
     const budget: TimeBudget = { remainingMs: () => (calls++ < 2 ? 1000 : 0) }
     const result = await runBatches([1, 2, 3], () => {}, { budget })
-    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
   it('passes a 0-based index and the same, non-aborted signal to every batch', async () => {
@@ -201,12 +202,12 @@ describe('runBatches', () => {
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: new FixedBudget(100), estimator: new MaxEstimator(100) })
     expect(handler).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: false })
+    expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: false, reason: StopReason.DONE })
   })
 
   it('handles an empty source', async () => {
     const result = await runBatches([], () => {}, { budget: new FixedBudget(100) })
-    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: false })
+    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: false, reason: StopReason.DONE })
   })
 
   it.each([
@@ -217,7 +218,7 @@ describe('runBatches', () => {
   ])('runs nothing with an %s', async (_, makeBudget) => {
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: makeBudget() })
-    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -225,7 +226,7 @@ describe('runBatches', () => {
     const estimator: Estimator = { record: () => {}, estimateMs: () => NaN }
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: new FixedBudget(100), estimator })
-    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true })
+    expect(result).toEqual({ batchesProcessed: 0, mayHaveMore: true, reason: StopReason.ESTIMATE_EXCEEDS_BUDGET })
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -270,7 +271,7 @@ describe('runBatches', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(onAbort).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(400)
-    expect(await run).toEqual({ batchesProcessed: 1, mayHaveMore: true })
+    expect(await run).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
   it('rejects with the handler error, not the abort reason, when a handler throws after abort', async () => {
@@ -284,13 +285,13 @@ describe('runBatches', () => {
     await assertion
   })
 
-  it('reports mayHaveMore when the budget runs out as the source ends, and the next run is a no-op', async () => {
+  it('reports mayHaveMore and budget-exhausted when the budget runs out as the source ends, and the next run is a no-op', async () => {
     const iterator = [1, 2][Symbol.iterator]()
     const source = { [Symbol.iterator]: () => iterator }
     const first = await runBatches(source, work(50), { budget: new FixedBudget(100) })
-    expect(first).toEqual({ batchesProcessed: 2, mayHaveMore: true })
+    expect(first).toEqual({ batchesProcessed: 2, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
     const second = await runBatches(source, () => {}, { budget: new FixedBudget(100) })
-    expect(second).toEqual({ batchesProcessed: 0, mayHaveMore: false })
+    expect(second).toEqual({ batchesProcessed: 0, mayHaveMore: false, reason: StopReason.DONE })
   })
 
   it('restarts an array source from the beginning when passed again', async () => {
@@ -317,7 +318,7 @@ describe('runBatches', () => {
       budget: new FixedBudget(100),
     })
     await vi.advanceTimersByTimeAsync(200)
-    expect(await run).toEqual({ batchesProcessed: 1, mayHaveMore: true })
+    expect(await run).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
     expect(abortedAtStart).toBe(true)
   })
 
@@ -341,7 +342,7 @@ describe('runBatches', () => {
       },
       { budget: new LambdaBudget({ getRemainingTimeInMillis: () => 5 * 60_000 }, 0) },
     )
-    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: false })
+    expect(result).toEqual({ batchesProcessed: 2, mayHaveMore: false, reason: StopReason.DONE })
   })
 })
 

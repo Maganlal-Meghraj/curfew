@@ -5,6 +5,7 @@ import type { BatchHandler } from './BatchHandler'
 import type { BatchSource } from './BatchSource'
 import type { RunOptions } from './RunOptions'
 import type { RunResult } from './RunResult'
+import { StopReason } from './StopReason'
 
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
 
@@ -18,26 +19,30 @@ export async function runBatches<T>(
   let batchesProcessed = 0
 
   try {
-    while (hasTimeForNextBatch(budget, estimator)) {
+    while (true) {
+      const reason = reasonToStopBeforeNextBatch(budget, estimator)
+      if (reason) return { batchesProcessed, mayHaveMore: true, reason }
+
       const startedAt = performance.now()
 
       const next = await batches.next()
-      if (next.done) return { batchesProcessed, mayHaveMore: false }
+      if (next.done) return { batchesProcessed, mayHaveMore: false, reason: StopReason.DONE }
 
       await handler(next.value, { signal: deadline.signal, index: batchesProcessed })
 
       estimator.record(performance.now() - startedAt)
       batchesProcessed++
     }
-    return { batchesProcessed, mayHaveMore: true }
   } finally {
     deadline.cancel()
   }
 }
 
-function hasTimeForNextBatch(budget: TimeBudget, estimator: Estimator): boolean {
+function reasonToStopBeforeNextBatch(budget: TimeBudget, estimator: Estimator): Exclude<StopReason, StopReason.DONE> | null {
   const remainingMs = budget.remainingMs()
-  return remainingMs > 0 && estimator.estimateMs() <= remainingMs
+  if (!(remainingMs > 0)) return StopReason.BUDGET_EXHAUSTED
+  if (!(estimator.estimateMs() <= remainingMs)) return StopReason.ESTIMATE_EXCEEDS_BUDGET
+  return null
 }
 
 function abortWhenBudgetRunsOut(budget: TimeBudget) {

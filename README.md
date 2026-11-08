@@ -38,10 +38,20 @@ export const handler = async (event, context) => {
 
 ## How it works
 
-Before pulling each batch, `runBatches` checks the budget. It stops and returns `mayHaveMore: true` if:
+Before pulling each batch, `runBatches` checks the budget. It stops and returns `mayHaveMore: true` with a `reason` if:
 
-- the budget is used up, or
-- the estimated batch duration is longer than the time remaining.
+- the budget is used up (`StopReason.BUDGET_EXHAUSTED`), or
+- the estimated batch duration is longer than the time remaining (`StopReason.ESTIMATE_EXCEEDS_BUDGET`).
+
+When the source runs out, it returns `mayHaveMore: false` with `StopReason.DONE`.
+
+```ts
+import { StopReason } from 'curfew'
+
+if (result.reason === StopReason.ESTIMATE_EXCEEDS_BUDGET) {
+  console.log('stopped with time left; consider a smaller batch size')
+}
+```
 
 The duration of a batch covers both fetching it from the source (`iterator.next()`) and running the handler, so slow async sources such as DB cursors or paginated APIs are counted. Durations are measured with `performance.now()`, so system clock changes don't affect the estimate.
 
@@ -126,7 +136,13 @@ runBatches<T>(
   source: Iterable<T> | AsyncIterable<T>,
   handler: (batch: T, ctx: { signal: AbortSignal; index: number }) => Promise<void> | void,
   options: { budget: TimeBudget; estimator?: Estimator },
-): Promise<{ batchesProcessed: number; mayHaveMore: boolean }>
+): Promise<{ batchesProcessed: number; mayHaveMore: boolean; reason: StopReason }>
+
+enum StopReason {
+  DONE = 'done',
+  BUDGET_EXHAUSTED = 'budget-exhausted',
+  ESTIMATE_EXCEEDS_BUDGET = 'estimate-exceeds-budget',
+}
 ```
 
 ## License
