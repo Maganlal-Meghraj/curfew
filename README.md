@@ -1,0 +1,130 @@
+# curfew
+
+Run batches from an (async) iterable and stop **before** a time budget runs out.
+
+Built for time-limited runtimes like AWS Lambda (15 min hard limit): instead of being killed mid-batch, `curfew` won't start a batch that probably can't finish, and tells you to reschedule the rest.
+
+- No runtime dependencies
+- Pluggable time budget and duration estimator
+- In-flight batches are never killed; they get an `AbortSignal` instead
+
+## Install
+
+```sh
+npm install curfew
+```
+
+Requires Node.js 22+. Ships ESM and CommonJS.
+
+## Quick start (AWS Lambda)
+
+```ts
+import { LambdaBudget, runBatches } from 'curfew'
+
+export const handler = async (event, context) => {
+  const { batchesProcessed, stoppedEarly } = await runBatches(
+    fetchPages(event.offset),
+    async (page, { signal }) => {
+      await processPage(page, { signal })
+    },
+    { budget: new LambdaBudget(context, 60_000) },
+  )
+
+  if (stoppedEarly) {
+    await reenqueue({ offset: event.offset + batchesProcessed })
+  }
+}
+```
+
+## How it works
+
+Before pulling each batch, `runBatches` checks the budget. It stops (`stoppedEarly: true`) if:
+
+- the budget is used up, or
+- the estimated batch duration is longer than the time remaining.
+
+The duration of a batch covers both fetching it from the source (`iterator.next()`) and running the handler, so slow async sources such as DB cursors or paginated APIs are counted.
+
+Batches run one at a time. A batch that has started is never interrupted: when the budget runs out, `ctx.signal` aborts with a `TimeoutError` reason (the same as `AbortSignal.timeout()`), so cooperative code such as `fetch(url, { signal })` can stop early.
+
+Handler errors propagate unchanged.
+
+### The source is not closed
+
+`runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed`) in a new invocation, or by passing the same iterator or generator to `runBatches` again:
+
+```ts
+const source = generateWork()
+const first = await runBatches(source, handle, { budget })
+if (first.stoppedEarly) await runBatches(source, handle, { budget: nextBudget })
+```
+
+## Budgets
+
+```ts
+import { DeadlineBudget, FixedBudget, LambdaBudget } from 'curfew'
+
+new FixedBudget(13 * 60_000)              // 13 minutes from now
+new DeadlineBudget(new Date('2026-12-01')) // until an absolute time (Date or epoch ms)
+new LambdaBudget(context, 60_000)          // Lambda remaining time minus a 60 s margin
+```
+
+`FixedBudget` and `DeadlineBudget` accept an optional `now: () => number` (default `Date.now`) for testing.
+
+### Custom budget
+
+Implement `TimeBudget`:
+
+```ts
+import type { TimeBudget } from 'curfew'
+
+class JobBudget implements TimeBudget {
+  constructor(private job: { expiresAt: number }) {}
+  remainingMs() {
+    return this.job.expiresAt - Date.now()
+  }
+}
+```
+
+## Estimators
+
+By default, the estimate is the longest batch seen so far (`MaxEstimator`), so `runBatches` errs toward stopping early. Before any batch has run, the estimate is `0`, so the first batch always runs. Pass `new MaxEstimator(initialMs)` to require that much time for the first batch:
+
+```ts
+import { MaxEstimator, runBatches } from 'curfew'
+
+await runBatches(source, handle, { budget, estimator: new MaxEstimator(30_000) })
+```
+
+### Custom estimator
+
+Implement `Estimator`. `record` is called with each batch's duration, and `estimateMs` is consulted before each batch:
+
+```ts
+import type { Estimator } from 'curfew'
+
+class EwmaEstimator implements Estimator {
+  private value = 0
+  constructor(private alpha = 0.3) {}
+  record(ms: number) {
+    this.value = this.value === 0 ? ms : this.alpha * ms + (1 - this.alpha) * this.value
+  }
+  estimateMs() {
+    return this.value
+  }
+}
+```
+
+## API
+
+```ts
+runBatches<T>(
+  source: Iterable<T> | AsyncIterable<T>,
+  handler: (batch: T, ctx: { signal: AbortSignal; index: number }) => Promise<void> | void,
+  options: { budget: TimeBudget; estimator?: Estimator },
+): Promise<{ batchesProcessed: number; stoppedEarly: boolean }>
+```
+
+## License
+
+MIT
