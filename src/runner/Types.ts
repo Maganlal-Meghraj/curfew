@@ -15,3 +15,7 @@ export interface BatchContext {
   signal: AbortSignal
   index: number
 }
+
+export type BatchSource<T> = Iterable<T> | AsyncIterable<T>
+
+export type BatchHandler<T> = (batch: T, ctx: BatchContext) => Promise<void> | void
