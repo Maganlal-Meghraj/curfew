@@ -14,8 +14,11 @@
   ],
   "license": "MIT",
   "author": "",
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/Maganlal-Meghraj/curfew#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maganlal-Meghraj/curfew.git"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
