@@ -1,7 +1,12 @@
 import type { TimeBudget } from '../budgets/TimeBudget'
 import type { Estimator } from '../estimators/Estimator'
 import { MaxEstimator } from '../estimators/MaxEstimator'
-import type { BatchHandler, BatchSource, RunOptions, RunResult } from './Types'
+import type { BatchHandler } from './BatchHandler'
+import type { BatchSource } from './BatchSource'
+import type { RunOptions } from './RunOptions'
+import type { RunResult } from './RunResult'
+
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
 
 export async function runBatches<T>(
   source: BatchSource<T>,
@@ -14,17 +19,17 @@ export async function runBatches<T>(
 
   try {
     while (hasTimeForNextBatch(budget, estimator)) {
-      const startedAt = Date.now()
+      const startedAt = performance.now()
 
       const next = await batches.next()
-      if (next.done) return { batchesProcessed, stoppedEarly: false }
+      if (next.done) return { batchesProcessed, mayHaveMore: false }
 
       await handler(next.value, { signal: deadline.signal, index: batchesProcessed })
 
-      estimator.record(Date.now() - startedAt)
+      estimator.record(performance.now() - startedAt)
       batchesProcessed++
     }
-    return { batchesProcessed, stoppedEarly: true }
+    return { batchesProcessed, mayHaveMore: true }
   } finally {
     deadline.cancel()
   }
@@ -38,10 +43,13 @@ function hasTimeForNextBatch(budget: TimeBudget, estimator: Estimator): boolean 
 function abortWhenBudgetRunsOut(budget: TimeBudget) {
   const controller = new AbortController()
   const remainingMs = budget.remainingMs()
-  const timer = setTimeout(
-    () => controller.abort(new DOMException('Budget exhausted', 'TimeoutError')),
-    remainingMs > 0 ? remainingMs : 0,
-  )
+  const delayMs = remainingMs > 0 ? remainingMs : 0
+
+  if (delayMs > MAX_TIMER_DELAY_MS) {
+    return { signal: controller.signal, cancel: () => {} }
+  }
+
+  const timer = setTimeout(() => controller.abort(new DOMException('Budget exhausted', 'TimeoutError')), delayMs)
   timer.unref()
   return { signal: controller.signal, cancel: () => clearTimeout(timer) }
 }

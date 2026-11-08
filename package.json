@@ -13,7 +13,7 @@
     "graceful-shutdown"
   ],
   "license": "MIT",
-  "author": "",
+  "author": "Pushkal Guha Choudhury",
   "homepage": "https://github.com/Maganlal-Meghraj/curfew#readme",
   "repository": {
     "type": "git",
@@ -28,7 +28,6 @@
     "node": ">=22"
   },
   "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
   "types": "./dist/index.d.cts",
   "exports": {
     ".": {
@@ -49,7 +48,7 @@
     "typecheck": "tsc",
     "lint": "eslint .",
     "lint:pkg": "publint && attw --pack .",
-    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build && npm run lint:pkg"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

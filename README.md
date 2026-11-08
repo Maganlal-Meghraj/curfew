@@ -22,7 +22,7 @@ Requires Node.js 22+. Ships ESM and CommonJS.
 import { LambdaBudget, runBatches } from 'curfew'
 
 export const handler = async (event, context) => {
-  const { batchesProcessed, stoppedEarly } = await runBatches(
+  const { batchesProcessed, mayHaveMore } = await runBatches(
     fetchPages(event.offset),
     async (page, { signal }) => {
       await processPage(page, { signal })
@@ -30,7 +30,7 @@ export const handler = async (event, context) => {
     { budget: new LambdaBudget(context, 60_000) },
   )
 
-  if (stoppedEarly) {
+  if (mayHaveMore) {
     await reenqueue({ offset: event.offset + batchesProcessed })
   }
 }
@@ -38,27 +38,31 @@ export const handler = async (event, context) => {
 
 ## How it works
 
-Before pulling each batch, `runBatches` checks the budget. It stops (`stoppedEarly: true`) if:
+Before pulling each batch, `runBatches` checks the budget. It stops and returns `mayHaveMore: true` if:
 
 - the budget is used up, or
 - the estimated batch duration is longer than the time remaining.
 
-The duration of a batch covers both fetching it from the source (`iterator.next()`) and running the handler, so slow async sources such as DB cursors or paginated APIs are counted.
+The duration of a batch covers both fetching it from the source (`iterator.next()`) and running the handler, so slow async sources such as DB cursors or paginated APIs are counted. Durations are measured with `performance.now()`, so system clock changes don't affect the estimate.
 
-Batches run one at a time. A batch that has started is never interrupted: when the budget runs out, `ctx.signal` aborts with a `TimeoutError` reason (the same as `AbortSignal.timeout()`), so cooperative code such as `fetch(url, { signal })` can stop early.
+Batches run one at a time. Items from a sync iterable are passed to the handler as is: a sync iterable of promises hands the handler the promises themselves, not their values. A batch that has started is never interrupted: when the budget runs out, `ctx.signal` aborts with a `TimeoutError` reason (the same as `AbortSignal.timeout()`), so cooperative code such as `fetch(url, { signal })` can stop early.
+
+- If fetching a batch overruns the budget, the handler still runs, but `ctx.signal` is already aborted. Check `signal.aborted` first if that matters.
+- The abort timer is armed once, from `budget.remainingMs()` at the start of the run. With a custom budget that isn't based on the clock, the signal and the decision to stop can disagree.
+- For budgets longer than about 24.8 days (the `setTimeout` limit), including `Infinity`, the signal never aborts. The budget check before each batch still applies.
 
 Handler errors propagate unchanged.
 
-The budget is checked before pulling the next item, so no item is ever pulled and then dropped. As a result, `stoppedEarly: true` means "there may be more work", not "there is more work": if the budget runs out just as the source is exhausted, the next run simply processes 0 batches and returns `stoppedEarly: false`.
+The budget is checked before pulling the next item, so no item is ever pulled and then dropped. As a result, `mayHaveMore: true` means "there may be more work", not "there is more work": if the budget runs out just as the source is exhausted, the next run simply processes 0 batches and returns `mayHaveMore: false`.
 
 ### The source is not closed
 
-`runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed`) in a new invocation, or by passing the same iterator or generator to `runBatches` again:
+`runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed`) in a new invocation, or by passing the same iterator or generator to `runBatches` again. An array (or any iterable that creates a fresh iterator each time) starts again from the beginning, so resume it by offset instead:
 
 ```ts
 const source = generateWork()
 const first = await runBatches(source, handle, { budget })
-if (first.stoppedEarly) await runBatches(source, handle, { budget: nextBudget })
+if (first.mayHaveMore) await runBatches(source, handle, { budget: nextBudget })
 ```
 
 ## Budgets
@@ -70,8 +74,6 @@ new FixedBudget(13 * 60_000)              // 13 minutes from now
 new DeadlineBudget(new Date('2026-12-01')) // until an absolute time (Date or epoch ms)
 new LambdaBudget(context, 60_000)          // Lambda remaining time minus a 60 s margin
 ```
-
-`FixedBudget` and `DeadlineBudget` accept an optional `now: () => number` (default `Date.now`) for testing.
 
 ### Custom budget
 
@@ -90,7 +92,7 @@ class JobBudget implements TimeBudget {
 
 ## Estimators
 
-By default, the estimate is the longest batch seen so far (`MaxEstimator`), so `runBatches` errs toward stopping early. Before any batch has run, the estimate is `0`, so the first batch always runs. Pass `new MaxEstimator(initialMs)` to require that much time for the first batch:
+By default, the estimate is the longest batch seen so far (`MaxEstimator`), so `runBatches` errs toward stopping early. Before any batch has run, the estimate is `0`, so the first batch runs as long as any time remains. Pass `new MaxEstimator(initialMs)` to require that much time for the first batch:
 
 ```ts
 import { MaxEstimator, runBatches } from 'curfew'
@@ -124,7 +126,7 @@ runBatches<T>(
   source: Iterable<T> | AsyncIterable<T>,
   handler: (batch: T, ctx: { signal: AbortSignal; index: number }) => Promise<void> | void,
   options: { budget: TimeBudget; estimator?: Estimator },
-): Promise<{ batchesProcessed: number; stoppedEarly: boolean }>
+): Promise<{ batchesProcessed: number; mayHaveMore: boolean }>
 ```
 
 ## License

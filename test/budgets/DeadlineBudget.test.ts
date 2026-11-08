@@ -1,8 +1,12 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { DeadlineBudget } from '../../src'
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 it('DeadlineBudget accepts a Date or epoch ms', () => {
-  const now = () => 1000
-  expect(new DeadlineBudget(1600, now).remainingMs()).toBe(600)
-  expect(new DeadlineBudget(new Date(1600), now).remainingMs()).toBe(600)
+  vi.useFakeTimers({ now: 1000 })
+  expect(new DeadlineBudget(1600).remainingMs()).toBe(600)
+  expect(new DeadlineBudget(new Date(1600)).remainingMs()).toBe(600)
 })
