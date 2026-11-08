@@ -10,7 +10,8 @@
     "noEmit": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": { "curfew": ["./src/index.ts"] }
   },
-  "include": ["src", "test", "tsdown.config.ts"]
+  "include": ["src", "test", "examples", "tsdown.config.ts"]
 }
