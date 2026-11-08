@@ -36,6 +36,30 @@ export const handler = async (event, context) => {
 }
 ```
 
+## Example
+
+[`examples/basic.ts`](examples/basic.ts) processes 10 pages with a 1-second budget per run. It shows the three ways a run ends, and how to resume after each:
+
+- **Budget runs out mid-page.** `saveItem` passes `ctx.signal` to its async work, so it rejects with an `AbortError`. The run catches that and resumes from the interrupted page, which is why page processing must be idempotent.
+- **The next page won't fit.** `reason` is `estimate-exceeds-budget`, and the next run starts at the following page.
+- **All pages done.** `reason` is `done`.
+
+```sh
+npm run build && node examples/basic.ts
+```
+
+```
+run 1: starting at page 0
+  stopped: budget ran out during page 4
+run 2: starting at page 4
+  stopped: estimate-exceeds-budget
+run 3: starting at page 5
+  stopped: done
+all pages processed
+```
+
+Requires Node.js 22.18+ to run `.ts` files directly.
+
 ## How it works
 
 Before pulling each batch, `runBatches` checks the budget. It stops and returns `mayHaveMore: true` with a `reason` if:
