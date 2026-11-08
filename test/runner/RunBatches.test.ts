@@ -20,6 +20,13 @@ describe('runBatches', () => {
     expect(result).toEqual({ batchesProcessed: 3, stoppedEarly: false })
   })
 
+  it('accepts a string source', async () => {
+    const seen: string[] = []
+    const result = await runBatches('ab', (c) => void seen.push(c), { budget: new FixedBudget(1000) })
+    expect(seen).toEqual(['a', 'b'])
+    expect(result).toEqual({ batchesProcessed: 2, stoppedEarly: false })
+  })
+
   it('stops before a batch once the deadline has passed', async () => {
     const neverPredicts: Estimator = { record: () => {}, estimateMs: () => 0 }
     const result = await runBatches([1, 2, 3], work(60), { budget: new FixedBudget(100), estimator: neverPredicts })

@@ -49,6 +49,8 @@ Batches run one at a time. A batch that has started is never interrupted: when t
 
 Handler errors propagate unchanged.
 
+The budget is checked before pulling the next item, so no item is ever pulled and then dropped. As a result, `stoppedEarly: true` means "there may be more work", not "there is more work": if the budget runs out just as the source is exhausted, the next run simply processes 0 batches and returns `stoppedEarly: false`.
+
 ### The source is not closed
 
 `runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed`) in a new invocation, or by passing the same iterator or generator to `runBatches` again:

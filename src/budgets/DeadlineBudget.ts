@@ -1,4 +1,4 @@
-import type { TimeBudget } from './time-budget'
+import type { TimeBudget } from './TimeBudget'
 
 export class DeadlineBudget implements TimeBudget {
   private readonly deadline: number

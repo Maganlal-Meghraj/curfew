@@ -1,12 +1,15 @@
-import { MaxEstimator } from '../estimators/max-estimator'
-import type { BatchContext, RunOptions, RunResult } from './types'
+import { MaxEstimator } from '../estimators/MaxEstimator'
+import type { BatchContext, RunOptions, RunResult } from './Types'
 
 export async function runBatches<T>(
   source: Iterable<T> | AsyncIterable<T>,
   handler: (batch: T, ctx: BatchContext) => Promise<void> | void,
   { budget, estimator = new MaxEstimator() }: RunOptions,
 ): Promise<RunResult> {
-  const iterator = Symbol.asyncIterator in source ? source[Symbol.asyncIterator]() : source[Symbol.iterator]()
+  const iterator =
+    typeof (source as AsyncIterable<T>)[Symbol.asyncIterator] === 'function'
+      ? (source as AsyncIterable<T>)[Symbol.asyncIterator]()
+      : (source as Iterable<T>)[Symbol.iterator]()
   const controller = new AbortController()
   const timer = setTimeout(
     () => controller.abort(new DOMException('Budget exhausted', 'TimeoutError')),

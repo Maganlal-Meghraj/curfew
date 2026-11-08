@@ -1,4 +1,4 @@
-import type { Estimator } from './estimator'
+import type { Estimator } from './Estimator'
 
 export class MaxEstimator implements Estimator {
   private max: number

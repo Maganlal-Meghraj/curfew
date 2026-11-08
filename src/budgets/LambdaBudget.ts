@@ -1,4 +1,4 @@
-import type { TimeBudget } from './time-budget'
+import type { TimeBudget } from './TimeBudget'
 
 export interface LambdaContextLike {
   getRemainingTimeInMillis(): number
