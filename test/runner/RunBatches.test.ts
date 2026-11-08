@@ -127,6 +127,32 @@ describe('runBatches', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('propagates a rejected async handler and clears the timer', async () => {
+    const error = new Error('async boom')
+    await expect(
+      runBatches(
+        [1, 2],
+        async () => {
+          throw error
+        },
+        { budget: new FixedBudget(1000) },
+      ),
+    ).rejects.toBe(error)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('propagates an error thrown by the source and clears the timer', async () => {
+    const error = new Error('cursor failed')
+    async function* failingSource() {
+      yield 1
+      throw error
+    }
+    const handler = vi.fn()
+    await expect(runBatches(failingSource(), handler, { budget: new FixedBudget(1000) })).rejects.toBe(error)
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('treats a NaN budget as exhausted', async () => {
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: { remainingMs: () => NaN } })

@@ -37,9 +37,10 @@ function hasTimeForNextBatch(budget: TimeBudget, estimator: Estimator): boolean 
 
 function abortWhenBudgetRunsOut(budget: TimeBudget) {
   const controller = new AbortController()
+  const remainingMs = budget.remainingMs()
   const timer = setTimeout(
     () => controller.abort(new DOMException('Budget exhausted', 'TimeoutError')),
-    Math.max(0, budget.remainingMs()),
+    remainingMs > 0 ? remainingMs : 0,
   )
   timer.unref()
   return { signal: controller.signal, cancel: () => clearTimeout(timer) }
