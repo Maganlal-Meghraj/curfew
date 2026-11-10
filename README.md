@@ -2,7 +2,7 @@
 
 Run batches from an (async) iterable and stop **before** a time budget runs out.
 
-Built for time-limited runtimes like AWS Lambda (15 min hard limit): instead of being killed mid-batch, `curfew` won't start a batch that probably can't finish, and tells you to reschedule the rest.
+Built for AWS Lambda (15 min hard limit) and similar time-limited runtimes: instead of being killed mid-batch, `curfew` won't start a batch that probably can't finish, and tells you to reschedule the rest.
 
 - No runtime dependencies
 - Pluggable time budget and duration estimator
@@ -22,16 +22,26 @@ Requires Node.js 22+. Ships ESM and CommonJS.
 import { LambdaBudget, runBatches } from 'curfew'
 
 export const handler = async (event, context) => {
-  const { batchesProcessed, mayHaveMore } = await runBatches(
-    fetchPages(event.offset),
-    async (page, { signal }) => {
-      await processPage(page, { signal })
-    },
-    { budget: new LambdaBudget(context, 60_000) },
-  )
+  let offset = event.offset
 
-  if (mayHaveMore) {
-    await reenqueue({ offset: event.offset + batchesProcessed })
+  try {
+    const { batchesProcessed, mayHaveMore } = await runBatches(
+      fetchPages(offset),
+      async (page, { signal }) => {
+        await processPage(page, { signal })
+        offset++
+      },
+      { budget: new LambdaBudget(context, 60_000) },
+    )
+
+    if (mayHaveMore) {
+      await reenqueue({ offset: event.offset + batchesProcessed })
+    }
+  } catch (error) {
+    // The signal aborted mid-page: an expected timeout, not a failure.
+    // `curfew` passes handler errors through, so catch it here and resume from the interrupted page.
+    if (!(error instanceof Error && error.name === 'AbortError')) throw error
+    await reenqueue({ offset })
   }
 }
 ```
@@ -40,7 +50,7 @@ export const handler = async (event, context) => {
 
 [`examples/basic.ts`](examples/basic.ts) processes 10 pages with a 1-second budget per run. It shows the three ways a run ends, and how to resume after each:
 
-- **Budget runs out mid-page.** `saveItem` passes `ctx.signal` to its async work, so it rejects with an `AbortError`. The run catches that and resumes from the interrupted page, which is why page processing must be idempotent.
+- **Budget runs out mid-page.** `saveItem` passes `ctx.signal` to its async work, so it rejects with an `AbortError`. The example's `runOnce` catches that error (`curfew` passes handler errors through) and resumes from the interrupted page, which is why page processing must be idempotent.
 - **The next page won't fit.** `reason` is `estimate-exceeds-budget`, and the next run starts at the following page.
 - **All pages done.** `reason` is `done`.
 
