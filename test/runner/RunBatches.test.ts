@@ -106,6 +106,19 @@ describe('runBatches', () => {
     expect(result).toEqual({ batchesProcessed: 1, mayHaveMore: true, reason: StopReason.BUDGET_EXHAUSTED })
   })
 
+  it('passes the TimeoutError thrown by signal.throwIfAborted() through to the caller', async () => {
+    const error = await runBatches(
+      [1],
+      (_, { signal }) => {
+        vi.advanceTimersByTime(150)
+        signal.throwIfAborted()
+      },
+      { budget: new FixedBudget(100) },
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(DOMException)
+    expect((error as DOMException).name).toBe('TimeoutError')
+  })
+
   it('does not close the source on early stop, so a generator can be resumed', async () => {
     function* gen() {
       yield* [1, 2, 3, 4]

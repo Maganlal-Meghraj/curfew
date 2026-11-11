@@ -40,7 +40,7 @@ export const handler = async (event, context) => {
   } catch (error) {
     // The signal aborted mid-page: an expected timeout, not a failure.
     // `curfew` passes handler errors through, so catch it here and resume from the interrupted page.
-    if (!(error instanceof Error && error.name === 'AbortError')) throw error
+    if (!(error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))) throw error
     await reenqueue({ offset })
   }
 }
