@@ -1,6 +1,6 @@
 {
   "name": "curfew",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Run batches from an (async) iterable and stop before a time budget runs out.",
   "keywords": [
     "batch",
