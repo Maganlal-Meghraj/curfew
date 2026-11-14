@@ -23,3 +23,24 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run lint:pkg
+
+  changeset:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require a changeset when src/ changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$(git diff --name-only "$BASE"...HEAD -- src/)" ]; then
+            echo "No changes in src/, no changeset needed."
+            exit 0
+          fi
+          if [ -z "$(git diff --name-only --diff-filter=A "$BASE"...HEAD -- '.changeset/*.md' ':!.changeset/README.md')" ]; then
+            echo "::error::src/ changed but no changeset was added. Run 'npm run changeset' (or 'npm run changeset -- --empty' if users won't notice the change)."
+            exit 1
+          fi
+          echo "Changeset found."

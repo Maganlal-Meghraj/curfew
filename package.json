@@ -48,10 +48,14 @@
     "typecheck": "tsc",
     "lint": "eslint .",
     "lint:pkg": "publint && attw --pack .",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only",
+    "release": "changeset publish",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build && npm run lint:pkg"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
     "eslint": "^10.14.0",
