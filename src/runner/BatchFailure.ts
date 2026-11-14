@@ -1,4 +1,4 @@
 export interface BatchFailure {
-  index: number
-  error: unknown
+  index: number;
+  error: unknown;
 }

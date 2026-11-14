@@ -1,6 +1,7 @@
-import js from '@eslint/js'
-import { defineConfig } from 'eslint/config'
-import tseslint from 'typescript-eslint'
+import js from '@eslint/js';
+import stylistic from '@stylistic/eslint-plugin';
+import { defineConfig } from 'eslint/config';
+import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   { ignores: ['dist'] },
@@ -12,7 +13,10 @@ export default defineConfig(
         projectService: { allowDefaultProject: ['eslint.config.js'] },
       },
     },
+    plugins: { '@stylistic': stylistic },
     rules: {
+      '@stylistic/semi': ['error', 'always'],
+      '@stylistic/member-delimiter-style': 'error',
       'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
       'max-lines-per-function': ['error', { max: 50, skipBlankLines: true, skipComments: true }],
       '@typescript-eslint/max-params': ['error', { max: 5 }],
@@ -28,4 +32,4 @@ export default defineConfig(
       'max-lines-per-function': 'off',
     },
   },
-)
+);

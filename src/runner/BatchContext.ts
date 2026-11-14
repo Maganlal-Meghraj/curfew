@@ -1,4 +1,4 @@
 export interface BatchContext {
-  signal: AbortSignal
-  index: number
+  signal: AbortSignal;
+  index: number;
 }

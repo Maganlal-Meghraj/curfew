@@ -1,1 +1,1 @@
-export type BatchSource<T> = Iterable<T> | AsyncIterable<T>
+export type BatchSource<T> = Iterable<T> | AsyncIterable<T>;
