@@ -4,4 +4,5 @@ import type { Estimator } from '../estimators/Estimator'
 export interface RunOptions {
   budget: TimeBudget
   estimator?: Estimator
+  continueOnError?: boolean
 }
