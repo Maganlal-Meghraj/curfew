@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises'
-import { FixedBudget, runBatches } from 'curfew'
+import { BudgetExceededError, FixedBudget, runBatches } from 'curfew'
 
 const TOTAL_PAGES = 10
 const RUN_BUDGET_MS = 1_000
@@ -22,32 +22,26 @@ async function saveItem(item: string, signal: AbortSignal): Promise<void> {
   await sleep(30, item, { signal })
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
-}
-
 async function runOnce(fromPage: number): Promise<number | null> {
-  let nextPage = fromPage
-
   try {
     const result = await runBatches(
       fetchPages(fromPage),
       async (page, { signal }) => {
-        if (signal.aborted) return
+        signal.throwIfAborted()
 
         for (const item of page.items) {
           await saveItem(item, signal)
         }
-        nextPage = page.number + 1
       },
       { budget: new FixedBudget(RUN_BUDGET_MS) },
     )
 
     console.log(`  stopped: ${result.reason}`)
-    return result.mayHaveMore ? nextPage : null
+    return result.mayHaveMore ? fromPage + result.batchesProcessed + result.failures.length : null
   } catch (error) {
-    if (!isAbortError(error)) throw error
+    if (!(error instanceof BudgetExceededError)) throw error
 
+    const nextPage = fromPage + error.batchesProcessed + error.failures.length
     console.log(`  stopped: budget ran out during page ${nextPage}`)
     return nextPage
   }
