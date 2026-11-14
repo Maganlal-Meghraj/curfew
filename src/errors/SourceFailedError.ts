@@ -5,6 +5,6 @@ export class SourceFailedError extends CurfewError {
   override readonly name = 'SourceFailedError'
 
   constructor(cause: unknown, progress: RunProgress) {
-    super('Source failed while fetching the next batch', cause, progress)
+    super(cause, progress)
   }
 }

@@ -5,6 +5,6 @@ export class ConfigError extends CurfewError {
   override readonly name = 'ConfigError'
 
   constructor(cause: unknown, progress: RunProgress) {
-    super('Budget or estimator failed', cause, progress)
+    super(cause, progress)
   }
 }

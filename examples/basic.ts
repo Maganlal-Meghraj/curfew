@@ -37,11 +37,11 @@ async function runOnce(fromPage: number): Promise<number | null> {
     )
 
     console.log(`  stopped: ${result.reason}`)
-    return result.mayHaveMore ? fromPage + result.batchesProcessed : null
+    return result.mayHaveMore ? fromPage + result.batchesProcessed + result.failures.length : null
   } catch (error) {
     if (!(error instanceof BudgetExceededError)) throw error
 
-    const nextPage = fromPage + error.batchesProcessed
+    const nextPage = fromPage + error.batchesProcessed + error.failures.length
     console.log(`  stopped: budget ran out during page ${nextPage}`)
     return nextPage
   }

@@ -2,4 +2,4 @@
 'curfew': minor
 ---
 
-`runBatches` now rejects with its own errors (`BudgetExceededError`, `HandlerFailedError`, `SourceFailedError`, `ConfigError`), so a budget abort is easy to tell apart from a real failure, and every error keeps the original in `cause` and says how far the run got.
+Breaking: `runBatches` now rejects with its own errors (`BudgetExceededError`, `HandlerFailedError`, `SourceFailedError`, `ConfigError`) instead of the original error. The original is in `cause`, and each error reports how far the run got.

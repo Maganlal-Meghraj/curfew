@@ -46,7 +46,7 @@ export const handler = async (event, context) => {
 
 [`examples/basic.ts`](examples/basic.ts) processes 10 pages with a 1-second budget per run. It shows the three ways a run ends, and how to resume after each:
 
-- **Budget runs out mid-page.** `saveItem` passes `ctx.signal` to its async work, so it rejects with an `AbortError` and `runBatches` rejects with a `BudgetExceededError`. The example's `runOnce` catches that and resumes from the interrupted page (`fromPage + error.batchesProcessed`), which is why page processing must be idempotent.
+- **Budget runs out mid-page.** `saveItem` passes `ctx.signal` to its async work, so it rejects with an `AbortError` and `runBatches` rejects with a `BudgetExceededError`. The example's `runOnce` catches that and resumes from the interrupted page (`fromPage + error.batchesProcessed + error.failures.length`), which is why page processing must be idempotent.
 - **The next page won't fit.** `reason` is `estimate-exceeds-budget`, and the next run starts at the following page.
 - **All pages done.** `reason` is `done`.
 
@@ -87,7 +87,7 @@ The duration of a batch covers both fetching it from the source (`iterator.next(
 
 Batches run one at a time. Items from a sync iterable are passed to the handler as is: a sync iterable of promises hands the handler the promises themselves, not their values. A batch that has started is never interrupted: when the budget runs out, `ctx.signal` aborts with a `TimeoutError` reason (the same as `AbortSignal.timeout()`), so cooperative code such as `fetch(url, { signal })` can stop early.
 
-- If fetching a batch overruns the budget, the handler still runs, but `ctx.signal` is already aborted. Check `signal.aborted` first if that matters.
+- If fetching a batch overruns the budget, the handler still runs, but `ctx.signal` is already aborted. Call `signal.throwIfAborted()` first if that matters: a handler that returns early counts as a successful batch, so a resume by offset would skip it.
 - The abort timer is armed once, from `budget.remainingMs()` at the start of the run. With a custom budget that isn't based on the clock, the signal and the decision to stop can disagree.
 - For budgets longer than about 24.8 days (the `setTimeout` limit), including `Infinity`, the signal never aborts. The budget check before each batch still applies.
 
@@ -118,6 +118,7 @@ All of them extend `CurfewError`. A non-iterable source still rejects with a pla
 
 - `BudgetExceededError` is decided by curfew's own signal, not by the error the handler throws, so an unrelated timeout from a downstream call (for example `fetch` with its own `AbortSignal.timeout()`) with time left is a `HandlerFailedError`. A genuine failure that happens after the budget ran out is a `BudgetExceededError` too; the original is in `cause`, and the next run surfaces it with time left.
 - The interrupted or failed batch is not counted in `batchesProcessed` and is not in `failures`.
+- The message is the original error's message with a `[curfew] ` prefix (for example `HandlerFailedError: [curfew] Cannot read properties of undefined`), so logs and alerts still say what broke.
 - Each error sets `name` (for example `'BudgetExceededError'`). If both the ESM and CommonJS copies of curfew get loaded, `instanceof` fails across them; check `error.name` instead.
 
 ### Keep going past failed batches
@@ -130,6 +131,8 @@ for (const { index, error } of failures) console.error(`batch ${index} failed`, 
 ```
 
 `batchesProcessed` counts only successful batches. A budget abort still ends the run with a `BudgetExceededError` that carries the failures so far, and a failing source still ends it with a `SourceFailedError`.
+
+Act on `failures`, don't only log it: a run where every batch failed still ends with `reason: 'done'` and `batchesProcessed: 0`.
 
 ## Budgets
 

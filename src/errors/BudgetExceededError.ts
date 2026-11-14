@@ -6,7 +6,7 @@ export class BudgetExceededError extends CurfewError {
   readonly index: number
 
   constructor(cause: unknown, index: number, progress: RunProgress) {
-    super(`Budget ran out while batch ${index} was running`, cause, progress)
+    super(cause, progress)
     this.index = index
   }
 }

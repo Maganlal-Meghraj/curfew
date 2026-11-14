@@ -6,7 +6,7 @@ export class HandlerFailedError extends CurfewError {
   readonly index: number
 
   constructor(cause: unknown, index: number, progress: RunProgress) {
-    super(`Handler failed on batch ${index}`, cause, progress)
+    super(cause, progress)
     this.index = index
   }
 }
