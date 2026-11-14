@@ -1,5 +1,12 @@
 # curfew
 
+## 0.2.0
+
+### Minor Changes
+
+- Breaking: `runBatches` now rejects with its own errors (`BudgetExceededError`, `HandlerFailedError`, `SourceFailedError`, `ConfigError`) instead of the original error. The original is in `cause`, and each error reports how far the run got.
+- New `continueOnError` option keeps the run going past failed batches and lists them in `RunResult.failures`.
+
 ## 0.1.2
 
 ### Patch Changes
