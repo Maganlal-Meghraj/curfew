@@ -1,7 +1,7 @@
-import type { TimeBudget } from './TimeBudget'
+import type { TimeBudget } from './TimeBudget';
 
 export interface LambdaContextLike {
-  getRemainingTimeInMillis(): number
+  getRemainingTimeInMillis(): number;
 }
 
 export class LambdaBudget implements TimeBudget {
@@ -11,6 +11,6 @@ export class LambdaBudget implements TimeBudget {
   ) {}
 
   remainingMs(): number {
-    return this.context.getRemainingTimeInMillis() - this.safetyMarginMs
+    return this.context.getRemainingTimeInMillis() - this.safetyMarginMs;
   }
 }

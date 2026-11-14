@@ -1,3 +1,3 @@
-import type { BatchContext } from './BatchContext'
+import type { BatchContext } from './BatchContext';
 
-export type BatchHandler<T> = (batch: T, ctx: BatchContext) => Promise<void> | void
+export type BatchHandler<T> = (batch: T, ctx: BatchContext) => Promise<void> | void;

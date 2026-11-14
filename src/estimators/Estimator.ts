@@ -1,4 +1,4 @@
 export interface Estimator {
-  record(ms: number): void
-  estimateMs(): number
+  record(ms: number): void;
+  estimateMs(): number;
 }

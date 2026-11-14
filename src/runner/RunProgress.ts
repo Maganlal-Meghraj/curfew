@@ -1,6 +1,6 @@
-import type { BatchFailure } from './BatchFailure'
+import type { BatchFailure } from './BatchFailure';
 
 export interface RunProgress {
-  batchesProcessed: number
-  failures: BatchFailure[]
+  batchesProcessed: number;
+  failures: BatchFailure[];
 }

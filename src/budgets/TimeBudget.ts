@@ -1,3 +1,3 @@
 export interface TimeBudget {
-  remainingMs(): number
+  remainingMs(): number;
 }
