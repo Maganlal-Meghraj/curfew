@@ -219,6 +219,14 @@ describe('runBatches', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('completes and clears the timer when setTimeout returns a number', async () => {
+    vi.spyOn(globalThis, 'setTimeout').mockReturnValue(42 as unknown as NodeJS.Timeout)
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    const result = await runBatches([1, 2], () => {}, { budget: new FixedBudget(1000) })
+    expect(result).toEqual({ batchesProcessed: 2, failures: [], mayHaveMore: false, reason: StopReason.DONE })
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(42)
+  })
+
   it('runs a batch whose estimate exactly equals the remaining time', async () => {
     const handler = vi.fn()
     const result = await runBatches([1], handler, { budget: new FixedBudget(100), estimator: new MaxEstimator(100) })

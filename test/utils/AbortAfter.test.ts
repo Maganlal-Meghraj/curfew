@@ -50,10 +50,11 @@ describe('abortAfter', () => {
     expect(() => cancel()).not.toThrow()
   })
 
-  it('does not keep the process alive', () => {
-    const unref = vi.fn()
-    vi.spyOn(globalThis, 'setTimeout').mockReturnValue({ unref } as unknown as NodeJS.Timeout)
-    abortAfter(100)
-    expect(unref).toHaveBeenCalledTimes(1)
+  it('keeps the process alive while the timer is pending', () => {
+    vi.useRealTimers()
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const { cancel } = abortAfter(100)
+    expect((setTimeoutSpy.mock.results[0].value as NodeJS.Timeout).hasRef()).toBe(true)
+    cancel()
   })
 })

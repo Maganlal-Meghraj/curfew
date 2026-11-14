@@ -9,6 +9,5 @@ export function abortAfter(ms: number) {
   }
 
   const timer = setTimeout(() => controller.abort(new DOMException('Budget exhausted', 'TimeoutError')), delayMs)
-  timer.unref()
   return { signal: controller.signal, cancel: () => clearTimeout(timer) }
 }

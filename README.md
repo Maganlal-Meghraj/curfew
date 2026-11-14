@@ -85,9 +85,16 @@ if (result.reason === StopReason.ESTIMATE_EXCEEDS_BUDGET) {
 
 The duration of a batch covers both fetching it from the source (`iterator.next()`) and running the handler, so slow async sources such as DB cursors or paginated APIs are counted. Durations are measured with `performance.now()`, so system clock changes don't affect the estimate.
 
+The source gets no signal and is never interrupted: `runBatches` awaits `iterator.next()` with no time limit. A fetch that stalls keeps the run waiting past the budget and through the safety margin, until the platform stops the invocation. Plan for it:
+
+- Give a source that can stall its own timeout.
+- Size the safety margin to cover the slowest fetch plus the slowest batch, plus the time needed to re-enqueue.
+- Fetch time is part of each batch's measured duration, so a source that is slow on every batch makes the run stop earlier. Only a fetch slower than any before it gets past the check.
+
 Batches run one at a time. Items from a sync iterable are passed to the handler as is: a sync iterable of promises hands the handler the promises themselves, not their values. A batch that has started is never interrupted: when the budget runs out, `ctx.signal` aborts with a `TimeoutError` reason (the same as `AbortSignal.timeout()`), so cooperative code such as `fetch(url, { signal })` can stop early.
 
-- If fetching a batch overruns the budget, the handler still runs, but `ctx.signal` is already aborted. Call `signal.throwIfAborted()` first if that matters: a handler that returns early counts as a successful batch, so a resume by offset would skip it.
+- If fetching a batch overruns the budget, the handler still runs, but `ctx.signal` is already aborted. Call `signal.throwIfAborted()` at the top of the handler: the run then rejects with a `BudgetExceededError` and the batch is not counted. `batchesProcessed` counts batches whose handler returned without throwing, whatever the handler did, so a handler that returns early (`if (signal.aborted) return`) is counted, and a resume by offset skips that batch for good.
+- The abort is delivered by a timer, so it can only fire when the event loop is free. During synchronous or CPU-bound work, `signal.aborted` stays `false` even after the budget has run out. To check in the middle of such work, call `budget.remainingMs()` (it reads the clock, so it is always current), or yield to the event loop between chunks with a timer: `await setTimeout(0)` from `node:timers/promises`. `setImmediate()` is not enough, because it can resolve before the abort timer fires.
 - The abort timer is armed once, from `budget.remainingMs()` at the start of the run. With a custom budget that isn't based on the clock, the signal and the decision to stop can disagree.
 - For budgets longer than about 24.8 days (the `setTimeout` limit), including `Infinity`, the signal never aborts. The budget check before each batch still applies.
 
@@ -95,13 +102,17 @@ The budget is checked before pulling the next item, so no item is ever pulled an
 
 ### The source is not closed
 
-`runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed + failures.length`) in a new invocation, or by passing the same iterator or generator to `runBatches` again. An array (or any iterable that creates a fresh iterator each time) starts again from the beginning, so resume it by offset instead:
+`runBatches` never calls `iterator.return()`, whether it finishes, stops early or the handler throws. You own the source's cleanup. You can resume either by offset (`batchesProcessed + failures.length`) in a new invocation, or, when `runBatches` returned a result, by passing the same iterator or generator to `runBatches` again:
 
 ```ts
 const source = generateWork()
 const first = await runBatches(source, handle, { budget })
 if (first.mayHaveMore) await runBatches(source, handle, { budget: nextBudget })
 ```
+
+An array (or any iterable that creates a fresh iterator each time) starts again from the beginning, so resume it by offset instead.
+
+After a rejection, including `BudgetExceededError`, resume by offset too. The batch whose handler threw has already been pulled from the iterator, so a second run on the same iterator starts at the batch after it and never retries it. With `continueOnError: true`, failed batches are consumed the same way and are reported in `failures`.
 
 ## Errors
 
