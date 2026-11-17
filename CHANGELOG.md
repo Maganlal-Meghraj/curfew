@@ -1,5 +1,11 @@
 # curfew
 
+## 0.2.2
+
+### Patch Changes
+
+- b6e6763: Releases are now published to npm from GitHub Actions with provenance. Nothing changes in how curfew behaves.
+
 ## 0.2.1
 
 ### Patch Changes
