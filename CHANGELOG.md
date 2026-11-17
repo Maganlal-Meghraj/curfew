@@ -1,5 +1,12 @@
 # curfew
 
+## 0.2.1
+
+### Patch Changes
+
+- 9e9f39f: `runBatches` no longer fails with `timer.unref is not a function` on runtimes where `setTimeout` returns a number, and Node no longer exits in the middle of a run while a handler waits on `ctx.signal`.
+- 129fc39: The source code now uses semicolons, enforced by ESLint. Nothing changes in how curfew behaves.
+
 ## 0.2.0
 
 ### Minor Changes
