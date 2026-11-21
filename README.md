@@ -115,6 +115,8 @@ new DeadlineBudget(new Date('2026-12-01')) // until an absolute time (Date or ep
 new LambdaBudget(context, 60_000)          // Lambda remaining time minus a 60 s margin
 ```
 
+The constructors throw on arguments that can never make progress: a non-number, a `NaN` deadline or duration, or a safety margin that is negative or not finite. A past deadline or a negative duration is allowed and gives an exhausted budget.
+
 For a custom budget, implement `TimeBudget`:
 
 ```ts
@@ -130,7 +132,7 @@ class JobBudget implements TimeBudget {
 
 ## Estimators
 
-By default, the estimate is the longest batch seen so far (`MaxEstimator`), so curfew errs toward stopping early. The first batch runs as long as any time remains; pass `new MaxEstimator(initialMs)` to require more:
+By default, the estimate is the longest batch seen so far (`MaxEstimator`), so curfew errs toward stopping early. The first batch runs as long as any time remains; pass `new MaxEstimator(initialMs)` to require more (it throws unless `initialMs` is a finite number >= 0):
 
 ```ts
 import { MaxEstimator, runBatches } from 'curfew'

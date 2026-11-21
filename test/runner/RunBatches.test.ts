@@ -243,7 +243,6 @@ describe('runBatches', () => {
     ['exhausted Lambda (margin > remaining)', () => new LambdaBudget({ getRemainingTimeInMillis: () => 30_000 }, 60_000)],
     ['negative FixedBudget', () => new FixedBudget(-1)],
     ['past DeadlineBudget', () => new DeadlineBudget(new Date(0))],
-    ['invalid Date deadline', () => new DeadlineBudget(new Date('nope'))],
   ])('runs nothing with an %s', async (_, makeBudget) => {
     const handler = vi.fn();
     const result = await runBatches([1], handler, { budget: makeBudget() });
